@@ -1,9 +1,5 @@
 from flask import Flask, send_file, jsonify, request
 import os
-import sys
-
-# Add current directory to path
-sys.path.insert(0, os.path.dirname(__file__))
 
 app = Flask(__name__)
 
@@ -17,7 +13,7 @@ FOLDERS = {
     'pdf': 'JMP PDF'
 }
 
-# Create folders if they don't exist (for Vercel)
+# Create folders if they don't exist
 for folder in FOLDERS.values():
     folder_path = os.path.join(BASE_DIR, folder)
     os.makedirs(folder_path, exist_ok=True)
@@ -94,7 +90,6 @@ def health():
         'status': 'ok',
         'base_dir': BASE_DIR,
         'folders': {k: os.path.exists(os.path.join(BASE_DIR, v)) for k, v in FOLDERS.items()},
-        'templates_path': os.path.join(BASE_DIR, 'templates'),
         'templates_exists': os.path.exists(os.path.join(BASE_DIR, 'templates'))
     })
 
@@ -104,7 +99,7 @@ def api_files():
     files = search_files(query)
     return jsonify(files)
 
-@app.route('/download/<file_type>/<filename>')
+@app.route('/download/<file_type>/<path:filename>')
 def download_file(file_type, filename):
     if file_type not in FOLDERS:
         return "Invalid file type", 404
@@ -125,3 +120,8 @@ def download_file(file_type, filename):
             return send_file(filepath, as_attachment=True)
     
     return "File not found", 404
+
+if __name__ == '__main__':
+    # Get port from environment variable (Render sets this)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
