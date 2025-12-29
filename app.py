@@ -71,6 +71,3 @@ def download_file(file_type, filename):
             return send_file(filepath, as_attachment=True)
     
     return "File not found", 404
-
-if __name__ == '__main__':
-    app.run(debug=True)
