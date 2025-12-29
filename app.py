@@ -1,5 +1,9 @@
 from flask import Flask, send_file, jsonify, request
 import os
+import sys
+
+# Add current directory to path
+sys.path.insert(0, os.path.dirname(__file__))
 
 app = Flask(__name__)
 
