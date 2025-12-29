@@ -1,8 +1,10 @@
-from flask import Flask, render_template, send_file, jsonify, request
+from flask import Flask, send_file, jsonify, request
 import os
-from pathlib import Path
 
 app = Flask(__name__)
+
+# Get the base directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Define folder paths
 FOLDERS = {
@@ -11,43 +13,90 @@ FOLDERS = {
     'pdf': 'JMP PDF'
 }
 
-def get_all_files():
-    """Get all unique file names (without extensions) from all folders"""
-    files = {}
+# Create folders if they don't exist (for Vercel)
+for folder in FOLDERS.values():
+    folder_path = os.path.join(BASE_DIR, folder)
+    os.makedirs(folder_path, exist_ok=True)
+
+def get_all_original_files():
+    """Get all files with their original names and availability"""
+    original_files = {}
     
     for file_type, folder in FOLDERS.items():
-        if os.path.exists(folder):
-            for filename in os.listdir(folder):
+        folder_path = os.path.join(BASE_DIR, folder)
+        if os.path.exists(folder_path):
+            for filename in os.listdir(folder_path):
                 if filename.startswith('.'):
                     continue
                     
                 name_without_ext = os.path.splitext(filename)[0]
                 
-                if name_without_ext not in files:
-                    files[name_without_ext] = {'html': False, 'excel': False, 'pdf': False}
+                if name_without_ext not in original_files:
+                    original_files[name_without_ext] = {
+                        'html': False, 
+                        'excel': False, 
+                        'pdf': False
+                    }
                 
-                files[name_without_ext][file_type] = True
+                original_files[name_without_ext][file_type] = True
     
-    return files
+    return original_files
 
 def search_files(query):
     """Search files by partial or full name match"""
-    all_files = get_all_files()
-    if not query:
-        return all_files
+    original_files = get_all_original_files()
     
+    # If no query, return all files
+    if not query:
+        result = {}
+        for original_name, file_data in original_files.items():
+            result[original_name] = {
+                'html': file_data['html'],
+                'excel': file_data['excel'],
+                'pdf': file_data['pdf'],
+                'original_name': original_name
+            }
+        return result
+    
+    # Search by query
     query_lower = query.lower()
-    filtered = {name: data for name, data in all_files.items() 
-                if query_lower in name.lower()}
+    filtered = {}
+    
+    for original_name, file_data in original_files.items():
+        if query_lower in original_name.lower():
+            filtered[original_name] = {
+                'html': file_data['html'],
+                'excel': file_data['excel'],
+                'pdf': file_data['pdf'],
+                'original_name': original_name
+            }
+    
     return filtered
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Read the HTML file and serve it
+    html_path = os.path.join(BASE_DIR, 'templates', 'index.html')
+    try:
+        with open(html_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        return f"Error: index.html not found at {html_path}", 404
+
+@app.route('/health')
+def health():
+    """Health check endpoint for debugging"""
+    return jsonify({
+        'status': 'ok',
+        'base_dir': BASE_DIR,
+        'folders': {k: os.path.exists(os.path.join(BASE_DIR, v)) for k, v in FOLDERS.items()},
+        'templates_path': os.path.join(BASE_DIR, 'templates'),
+        'templates_exists': os.path.exists(os.path.join(BASE_DIR, 'templates'))
+    })
 
 @app.route('/api/files')
 def api_files():
-    query = request.args.get('q', '')
+    query = request.args.get('q', '').strip()
     files = search_files(query)
     return jsonify(files)
 
@@ -57,6 +106,7 @@ def download_file(file_type, filename):
         return "Invalid file type", 404
     
     folder = FOLDERS[file_type]
+    folder_path = os.path.join(BASE_DIR, folder)
     
     # Find the file with correct extension
     extensions = {
@@ -66,7 +116,7 @@ def download_file(file_type, filename):
     }
     
     for ext in extensions[file_type]:
-        filepath = os.path.join(folder, filename + ext)
+        filepath = os.path.join(folder_path, filename + ext)
         if os.path.exists(filepath):
             return send_file(filepath, as_attachment=True)
     
